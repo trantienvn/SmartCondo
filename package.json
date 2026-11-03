@@ -7,18 +7,27 @@
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "start": "node dist/server.js",
-    "build": "tsc -p tsconfig.json"
+    "build": "tsc -p tsconfig.json",
+    "build:web": "npm run --prefix web build",
+    "build:all": "npm run build && npm run build:web",
+    "db:migrate": "tsx src/db/migrate.ts",
+    "db:bootstrap-admin": "tsx src/db/bootstrap-admin.ts"
   },
   "engines": {
     "node": ">=22"
   },
   "dependencies": {
+    "bcryptjs": "^3.0.3",
     "dotenv": "^16.6.1",
-    "express": "^5.1.0"
+    "express": "^5.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "pg": "^8.23.1"
   },
   "devDependencies": {
     "@types/express": "^5.0.3",
+    "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^22.15.30",
+    "@types/pg": "^8.15.5",
     "tsx": "^4.19.4",
     "typescript": "^5.8.3"
   }
