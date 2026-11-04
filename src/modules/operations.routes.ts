@@ -127,9 +127,9 @@ router.patch("/maintenance-requests/:requestId", requirePermission("maintenance:
       }
     }
     const updated = await client.query(
-      `UPDATE maintenance_requests SET status = $2,
+      `UPDATE maintenance_requests SET status = $2::varchar,
          assigned_to = COALESCE($3, assigned_to),
-         completed_at = CASE WHEN $2 = 'COMPLETED' THEN now() ELSE completed_at END,
+         completed_at = CASE WHEN $2::varchar = 'COMPLETED' THEN now() ELSE completed_at END,
          updated_at = now() WHERE id = $1
        RETURNING id, apartment_id, title, priority, status, assigned_to, completed_at, updated_at`,
       [currentRequest.rows[0].id, after, assignedTo ?? null],

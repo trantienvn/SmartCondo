@@ -11,7 +11,8 @@
     "build:web": "npm run --prefix web build",
     "build:all": "npm run build && npm run build:web",
     "db:migrate": "tsx src/db/migrate.ts",
-    "db:bootstrap-admin": "tsx src/db/bootstrap-admin.ts"
+    "db:bootstrap-admin": "tsx src/db/bootstrap-admin.ts",
+    "db:seed-demo": "tsx src/db/seed-demo.ts"
   },
   "engines": {
     "node": ">=22"
