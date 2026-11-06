@@ -40,6 +40,17 @@ export function createApp() {
     response.status(200).json({ success: true, data: { status: "healthy", dependencies: { database: "connected" }, timestamp: new Date().toISOString() } });
   });
 
+  app.post(`${basePath}/demo/seed`, async (_request, response) => {
+    try {
+      const { runSeed } = await import("./db/seed.js");
+      await runSeed();
+      response.status(200).json({ success: true, data: { message: "Demo data seeded successfully." } });
+    } catch (error) {
+      console.error("Demo seed error:", error);
+      response.status(500).json({ success: false, error: { code: "SEED_ERROR", message: (error as Error).message } });
+    }
+  });
+
   app.use(`${basePath}/auth`, authRoutes);
   app.use(basePath, coreRoutes);
   app.use(basePath, adminRoutes);

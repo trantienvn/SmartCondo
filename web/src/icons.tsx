@@ -14,6 +14,9 @@ const paths: Record<string, string> = {
   check: "m5 12 4 4L19 6",
   plus: "M12 5v14m-7-7h14",
   close: "m6 6 12 12M18 6 6 18",
+  droplet: "M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z",
+  bolt: "M13 2 3 14h9l-1 8 10-12h-9l1-8z",
+  coins: "M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm0 18a8 8 0 1 1 8-8 8 8 0 0 1-8 8zm1-13h-2v3H8v2h3v3h2v-3h3v-2h-3z",
 };
 
 export function Icon({ name, ...props }: SVGProps<SVGSVGElement> & { name: keyof typeof paths }) {

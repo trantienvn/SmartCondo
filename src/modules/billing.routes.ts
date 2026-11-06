@@ -121,6 +121,66 @@ router.get("/invoices", requirePermission("billing:read"), async (request, respo
   response.json({ success: true, data: { invoices: result.rows } });
 });
 
+router.get("/invoices/:invoiceId", requirePermission("billing:read"), async (request, response) => {
+  const userId = (request as AuthenticatedRequest).auth!.userId;
+  const invoice = await pool.query(
+    `SELECT i.id, i.invoice_number, i.apartment_id, a.code AS apartment_code, i.billing_period_id,
+            i.status, i.issued_at, i.due_date, i.total_amount,
+            COALESCE(sum(p.amount) FILTER (WHERE p.status = 'RECORDED'), 0) AS paid_amount,
+            i.total_amount - COALESCE(sum(p.amount) FILTER (WHERE p.status = 'RECORDED'), 0) AS balance_due
+     FROM invoices i JOIN apartments a ON a.id = i.apartment_id
+     LEFT JOIN payments p ON p.invoice_id = i.id
+     WHERE i.id = $2 AND ${invoiceAccess("i.apartment_id")}
+     GROUP BY i.id, a.code`,
+    [userId, request.params.invoiceId],
+  );
+  if (!invoice.rowCount) {
+    response.status(404).json({ success: false, error: { code: "INVOICE_NOT_FOUND", message: "Invoice not found in your scope." } });
+    return;
+  }
+  const items = await pool.query(
+    `SELECT ii.id, ii.description, ii.quantity, ii.unit_price, ii.amount, ft.code AS fee_code, ft.name AS fee_name
+     FROM invoice_items ii LEFT JOIN fee_types ft ON ft.id = ii.fee_type_id
+     WHERE ii.invoice_id = $1 ORDER BY ii.amount DESC`,
+    [request.params.invoiceId],
+  );
+  const payments = await pool.query(
+    `SELECT p.id, p.amount, p.method, p.status, p.paid_at, p.idempotency_key
+     FROM payments p WHERE p.invoice_id = $1 ORDER BY p.paid_at DESC`,
+    [request.params.invoiceId],
+  );
+  response.json({
+    success: true,
+    data: {
+      invoice: invoice.rows[0],
+      items: items.rows,
+      payments: payments.rows,
+    },
+  });
+});
+
+router.get("/billing-periods", requirePermission("billing:read"), async (request, response) => {
+  const userId = (request as AuthenticatedRequest).auth!.userId;
+  const buildingId = typeof request.query.buildingId === "string" ? request.query.buildingId : null;
+  const rows = await pool.query(
+    `SELECT bp.id, bp.building_id, b.name AS building_name, bp.period_start, bp.period_end, bp.due_date,
+            bp.status, bp.created_at,
+            count(DISTINCT i.id)::int AS invoice_count,
+            COALESCE(sum(i.total_amount), 0) AS total_amount
+     FROM billing_periods bp
+     JOIN buildings b ON b.id = bp.building_id
+     LEFT JOIN invoices i ON i.billing_period_id = bp.id
+     WHERE ($2::uuid IS NULL OR bp.building_id = $2) AND EXISTS (
+       SELECT 1 FROM user_role_assignments s JOIN roles r ON r.id = s.role_id
+       WHERE s.user_id = $1 AND (r.code = 'SUPER_ADMIN' OR s.organization_id = b.organization_id OR s.building_id = b.id)
+     )
+     GROUP BY bp.id, b.name
+     ORDER BY bp.period_end DESC LIMIT 50`,
+    [userId, buildingId],
+  );
+  response.json({ success: true, data: { billingPeriods: rows.rows } });
+});
+
 router.post("/billing-periods", requirePermission("billing:manage"), async (request, response) => {
   const userId = (request as AuthenticatedRequest).auth!.userId;
   const { buildingId, periodStart, periodEnd, dueDate } = request.body ?? {};

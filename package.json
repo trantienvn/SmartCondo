@@ -12,7 +12,10 @@
     "build:all": "npm run build && npm run build:web",
     "db:migrate": "tsx src/db/migrate.ts",
     "db:bootstrap-admin": "tsx src/db/bootstrap-admin.ts",
-    "db:seed-demo": "tsx src/db/seed-demo.ts"
+    "db:seed": "tsx src/db/seed.ts",
+    "db:seed-demo": "tsx src/db/seed-demo.ts",
+    "mock:php": "php -S 127.0.0.1:3000 mock/server.php",
+    "test:mock": "php mock/test.php"
   },
   "engines": {
     "node": ">=22"

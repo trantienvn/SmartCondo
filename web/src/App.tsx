@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { api, clearSession, hasSession, loadSession, login, logout } from "./api";
-import type { ApiResult, Apartment, Building, DashboardSummary, Invoice, MaintenanceRequest, Notice, Session } from "./types";
+import type { ApiResult, Apartment, BillingPeriod, Building, DashboardSummary, FeeType, Invoice, InvoiceDetail, MaintenanceRequest, Notice, Session, UtilityReading } from "./types";
 import { Icon } from "./icons";
 
-type PageId = "overview" | "buildings" | "apartments" | "people" | "invoices" | "maintenance" | "notices";
+type PageId = "overview" | "buildings" | "apartments" | "people" | "invoices" | "maintenance" | "notices" | "utility-readings" | "fee-types";
 type Remote<T> = { data: T | null; loading: boolean; error: string; reload: () => void };
 
 function useRemote<T>(path: string, property?: string): Remote<T> {
@@ -25,7 +25,7 @@ function useRemote<T>(path: string, property?: string): Remote<T> {
   return { data, loading, error, reload };
 }
 
-const navItems: { id: PageId; label: string; icon: "home" | "building" | "apartment" | "people" | "invoice" | "wrench" | "bell"; permission?: string }[] = [
+const navItems: { id: PageId; label: string; icon: "home" | "building" | "apartment" | "people" | "invoice" | "wrench" | "bell" | "droplet" | "coins"; permission?: string }[] = [
   { id: "overview", label: "Tổng quan", icon: "home", permission: "dashboard:read" },
   { id: "buildings", label: "Tòa nhà", icon: "building", permission: "building:read" },
   { id: "apartments", label: "Căn hộ", icon: "apartment", permission: "apartment:read" },
@@ -33,11 +33,24 @@ const navItems: { id: PageId; label: string; icon: "home" | "building" | "apartm
   { id: "invoices", label: "Hóa đơn", icon: "invoice", permission: "billing:read" },
   { id: "maintenance", label: "Bảo trì", icon: "wrench", permission: "maintenance:read" },
   { id: "notices", label: "Thông báo", icon: "bell", permission: "notification:read" },
+  { id: "utility-readings", label: "Chỉ số tiện ích", icon: "droplet", permission: "utility:read" },
+  { id: "fee-types", label: "Biểu phí", icon: "coins", permission: "billing:manage" },
 ];
+
+function getInitialPage(session: Session): PageId {
+  const residentOnly = session.scopes.some((scope) => ["OWNER", "RESIDENT"].includes(scope.role))
+    && !session.scopes.some((scope) => !["OWNER", "RESIDENT"].includes(scope.role));
+  if (residentOnly) return "overview";
+  const permitted = navItems.filter((item) => !item.permission || session.permissions.includes(item.permission));
+  return permitted[0]?.id ?? "overview";
+}
 
 export default function App() {
   const [session, setSession] = useState<Session | null>(() => loadSession());
-  const [page, setPage] = useState<PageId>("overview");
+  const [page, setPage] = useState<PageId>(() => {
+    const saved = loadSession();
+    return saved ? getInitialPage(saved) : "overview";
+  });
   const [toast, setToast] = useState("");
   const [mobileMenu, setMobileMenu] = useState(false);
 
@@ -53,7 +66,7 @@ export default function App() {
     return () => window.clearTimeout(timeout);
   }, [toast]);
 
-  if (!session || !hasSession()) return <Login onLogin={(next) => { setSession(next); setPage("overview"); }} />;
+  if (!session || !hasSession()) return <Login onLogin={(next) => { setSession(next); setPage(getInitialPage(next)); }} />;
 
   const residentOnly = session.scopes.some((scope) => ["OWNER", "RESIDENT"].includes(scope.role))
     && !session.scopes.some((scope) => !["OWNER", "RESIDENT"].includes(scope.role));
@@ -61,6 +74,7 @@ export default function App() {
     ? navItems.filter((item) => ["overview", "invoices", "maintenance", "notices"].includes(item.id))
     : navItems.filter((item) => !item.permission || session.permissions.includes(item.permission));
   const active = availableNav.find((item) => item.id === page) ?? availableNav[0];
+  const currentPage = active?.id ?? "overview";
   const notify = (message: string) => setToast(message);
 
   async function leave() {
@@ -73,7 +87,7 @@ export default function App() {
       {!residentOnly && <aside className={`rail ${mobileMenu ? "rail-open" : ""}`} aria-label="Điều hướng chính">
         <div className="brand-lockup"><span className="brand-mark"><Icon name="building" /></span><span>smart<span className="brand-light">condo</span></span></div>
         <p className="rail-caption">Không gian làm việc</p>
-        <nav>{availableNav.map((item) => <button key={item.id} className={`nav-link ${page === item.id ? "is-active" : ""}`} onClick={() => { setPage(item.id); setMobileMenu(false); }}><Icon name={item.icon} /><span>{item.label}</span></button>)}</nav>
+        <nav>{availableNav.map((item) => <button key={item.id} className={`nav-link ${currentPage === item.id ? "is-active" : ""}`} onClick={() => { setPage(item.id); setMobileMenu(false); }}><Icon name={item.icon} /><span>{item.label}</span></button>)}</nav>
         <div className="rail-bottom"><div className="user-chip"><span className="avatar">{initials(session.user.fullName || session.user.email)}</span><span className="user-copy"><strong>{session.user.fullName || session.user.email}</strong><small>{roleLabel(session.scopes[0]?.role)}</small></span></div><button className="icon-button logout-button" aria-label="Đăng xuất" onClick={leave}><Icon name="logout" /></button></div>
       </aside>}
 
@@ -85,8 +99,8 @@ export default function App() {
         </header>
         <div className="workspace">
           {residentOnly
-            ? <ResidentPage page={page} setPage={setPage} notify={notify} />
-            : <AdminPage page={page} session={session} notify={notify} />}
+            ? <ResidentPage page={currentPage} setPage={setPage} notify={notify} />
+            : <AdminPage page={currentPage} session={session} notify={notify} />}
         </div>
       </main>
       {residentOnly && <nav className="mobile-bottom" aria-label="Điều hướng cư dân">{[
@@ -94,7 +108,7 @@ export default function App() {
         { id: "invoices" as PageId, label: "Hóa đơn", icon: "invoice" as const },
         { id: "maintenance" as PageId, label: "Bảo trì", icon: "wrench" as const },
         { id: "notices" as PageId, label: "Thông báo", icon: "bell" as const },
-      ].map((item) => <button key={item.id} className={page === item.id ? "bottom-active" : ""} onClick={() => setPage(item.id)}><Icon name={item.icon} /><span>{item.label}</span></button>)}</nav>}
+      ].map((item) => <button key={item.id} className={currentPage === item.id ? "bottom-active" : ""} onClick={() => setPage(item.id)}><Icon name={item.icon} /><span>{item.label}</span></button>)}</nav>}
       {toast && <div className="toast" role="status"><span className="toast-check"><Icon name="check" /></span>{toast}<button className="icon-button" aria-label="Đóng thông báo" onClick={() => setToast("")}><Icon name="close" /></button></div>}
     </div>
   );
@@ -105,12 +119,28 @@ function Login({ onLogin }: { onLogin: (session: Session) => void }) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [seeding, setSeeding] = useState(false);
+  const [seedMsg, setSeedMsg] = useState("");
+
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault(); setLoading(true); setError("");
     try { onLogin(await login(email.trim(), password)); }
     catch (reason) { setError((reason as Error).message); }
     finally { setLoading(false); }
   }
+
+  async function quickSeed() {
+    setSeeding(true); setSeedMsg(""); setError("");
+    try {
+      await api("/demo/seed", { method: "POST" });
+      setSeedMsg("Đã khởi tạo thành công dữ liệu mẫu! Bạn có thể chọn tài khoản bên dưới để đăng nhập ngay.");
+    } catch (reason) {
+      setError((reason as Error).message);
+    } finally {
+      setSeeding(false);
+    }
+  }
+
   return <main className="login-page">
     <section className="login-story"><div className="brand-lockup light-brand"><span className="brand-mark"><Icon name="building" /></span><span>smart<span className="brand-light">condo</span></span></div>
       <div className="login-story-copy"><div className="building-line" aria-hidden="true"><span /><span /><span /><span /><span /></div><p className="login-kicker">Quản lý tòa nhà, gọn trong một nơi</p><h1>Vận hành rõ ràng.<br /><em>Cư dân an tâm.</em></h1><p className="login-intro">Thông tin căn hộ, phí dịch vụ và yêu cầu bảo trì được kết nối trong một không gian thống nhất.</p></div>
@@ -121,7 +151,22 @@ function Login({ onLogin }: { onLogin: (session: Session) => void }) {
       <label>Email<input type="email" autoComplete="username" value={email} onChange={(event) => setEmail(event.target.value)} required placeholder="ten@vidu.vn" /></label>
       <label>Mật khẩu<input type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} required placeholder="Nhập mật khẩu" /></label>
       {error && <div className="form-error" role="alert"><strong>Chưa thể đăng nhập</strong><span>{error}</span></div>}
+      {seedMsg && <div className="form-error" style={{ background: "#e6fffa", borderColor: "#00b8d9", color: "#006677" }} role="status"><strong>Thông báo</strong><span>{seedMsg}</span></div>}
       <button className="button button-primary login-submit" disabled={loading}>{loading ? "Đang kiểm tra…" : "Đăng nhập"}<Icon name="arrow" /></button>
+      
+      <div className="demo-accounts">
+        <p>⚡ Tài khoản Demo thử nghiệm nhanh:</p>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+          <button type="button" className="button button-quiet" style={{ fontSize: "10px", padding: "4px 8px" }} onClick={() => { setEmail("manager@smartcondo.vn"); setPassword("Manager@123"); }}>🏢 Ban Quản Lý</button>
+          <button type="button" className="button button-quiet" style={{ fontSize: "10px", padding: "4px 8px" }} onClick={() => { setEmail("accountant@smartcondo.vn"); setPassword("Accountant@123"); }}>💰 Kế toán</button>
+          <button type="button" className="button button-quiet" style={{ fontSize: "10px", padding: "4px 8px" }} onClick={() => { setEmail("resident@smartcondo.vn"); setPassword("Resident@123"); }}>👤 Cư dân A-101</button>
+          <button type="button" className="button button-quiet" style={{ fontSize: "10px", padding: "4px 8px" }} onClick={() => { setEmail("admin@smartcondo.vn"); setPassword("Admin@123456"); }}>👑 Admin</button>
+        </div>
+        <button type="button" className="text-button" style={{ marginTop: "10px", fontSize: "10px", color: "var(--cyan)" }} disabled={seeding} onClick={quickSeed}>
+          {seeding ? "Đang nạp dữ liệu..." : "🔄 Nhấn vào đây để nạp lại dữ liệu mẫu Demo (1-Click)"}
+        </button>
+      </div>
+
       <p className="login-support">Cần hỗ trợ? Liên hệ Ban quản lý tòa nhà.</p>
     </form></section>
   </main>;
@@ -131,10 +176,12 @@ function AdminPage({ page, session, notify }: { page: PageId; session: Session; 
   switch (page) {
     case "buildings": return <BuildingsPage canCreate={session.permissions.includes("building:manage") && session.scopes.some((scope) => ["SUPER_ADMIN", "ORG_ADMIN"].includes(scope.role))} notify={notify} />;
     case "apartments": return <ApartmentsPage canManage={session.permissions.includes("building:manage")} notify={notify} />;
-    case "people": return <PeoplePage />;
-    case "invoices": return <InvoicesPage />;
+    case "people": return <PeoplePage canManage={session.permissions.includes("people:manage")} notify={notify} />;
+    case "invoices": return <InvoicesPage canManage={session.permissions.includes("billing:manage")} notify={notify} />;
     case "maintenance": return <MaintenancePage canManage={session.permissions.includes("maintenance:manage")} notify={notify} />;
     case "notices": return <NoticesPage canManage={session.permissions.includes("notification:manage")} notify={notify} />;
+    case "utility-readings": return <UtilityReadingsPage canManage={session.permissions.includes("utility:manage")} notify={notify} />;
+    case "fee-types": return <FeeTypesPage canManage={session.permissions.includes("billing:manage")} notify={notify} />;
     default: return <AdminDashboard />;
   }
 }
@@ -222,22 +269,715 @@ function ApartmentsPage({ canManage, notify }: { canManage: boolean; notify: (me
   </>;
 }
 
-function PeoplePage() {
+function InvoiceDetailModal({ invoiceId, onClose }: { invoiceId: string; onClose: () => void }) {
+  const detail = useRemote<InvoiceDetail>(invoiceId ? `/invoices/${invoiceId}` : "");
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <div>
+            <h2>Chi tiết hóa đơn {detail.data?.invoice.invoice_number ?? "..."}</h2>
+            <small style={{ color: "#64748b" }}>Căn hộ: {detail.data?.invoice.apartment_code}</small>
+          </div>
+          <button type="button" className="button button-quiet" onClick={onClose} aria-label="Đóng">✕</button>
+        </div>
+        <div className="modal-body">
+          {detail.loading ? (
+            <LoadingLine />
+          ) : detail.error ? (
+            <ErrorBanner message={detail.error} />
+          ) : detail.data ? (
+            <>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "10px", background: "#f8fafc", padding: "12px", borderRadius: "6px" }}>
+                <div><small style={{ color: "#64748b", display: "block" }}>Trạng thái</small><StatusTag value={detail.data.invoice.status} /></div>
+                <div><small style={{ color: "#64748b", display: "block" }}>Hạn nộp</small><strong>{date(detail.data.invoice.due_date)}</strong></div>
+                <div><small style={{ color: "#64748b", display: "block" }}>Tổng tiền</small><strong>{money(detail.data.invoice.total_amount)}</strong></div>
+                <div><small style={{ color: "#64748b", display: "block" }}>Còn nợ</small><strong style={{ color: Number(detail.data.invoice.balance_due) > 0 ? "#b91c1c" : "#15803d" }}>{money(detail.data.invoice.balance_due)}</strong></div>
+              </div>
+
+              <div>
+                <h3 style={{ fontSize: "13px", fontWeight: 600, margin: "8px 0" }}>Bảng kê chi tiết các khoản phí</h3>
+                {detail.data.items.length ? (
+                  <table className="breakdown-table">
+                    <thead>
+                      <tr>
+                        <th>Khoản phí</th>
+                        <th style={{ textAlign: "right" }}>Số lượng / Tiêu thụ</th>
+                        <th style={{ textAlign: "right" }}>Đơn giá</th>
+                        <th style={{ textAlign: "right" }}>Thành tiền</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {detail.data.items.map((item) => (
+                        <tr key={item.id}>
+                          <td><strong>{item.fee_name ?? item.description}</strong></td>
+                          <td style={{ textAlign: "right" }}>{Number(item.quantity).toLocaleString("vi-VN")}</td>
+                          <td style={{ textAlign: "right" }}>{money(item.unit_price)}</td>
+                          <td style={{ textAlign: "right" }}><strong>{money(item.amount)}</strong></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                ) : (
+                  <p style={{ color: "#64748b", fontSize: "11px" }}>Chưa có chi tiết dòng phí.</p>
+                )}
+                <div className="breakdown-total">Tổng cộng: {money(detail.data.invoice.total_amount)}</div>
+              </div>
+
+              <div>
+                <h3 style={{ fontSize: "13px", fontWeight: 600, margin: "8px 0" }}>Lịch sử thanh toán</h3>
+                {detail.data.payments.length ? (
+                  <table className="breakdown-table">
+                    <thead>
+                      <tr>
+                        <th>Thời gian</th>
+                        <th>Phương thức</th>
+                        <th>Trạng thái</th>
+                        <th style={{ textAlign: "right" }}>Số tiền</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {detail.data.payments.map((p) => (
+                        <tr key={p.id}>
+                          <td>{date(p.paid_at)}</td>
+                          <td>{p.method === "CASH" ? "Tiền mặt" : p.method === "BANK_TRANSFER" ? "Chuyển khoản" : "Mô phỏng"}</td>
+                          <td><StatusTag value={p.status} /></td>
+                          <td style={{ textAlign: "right", color: "#15803d" }}><strong>{money(p.amount)}</strong></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                ) : (
+                  <p style={{ color: "#64748b", fontSize: "11px" }}>Chưa ghi nhận khoản thanh toán nào cho hóa đơn này.</p>
+                )}
+              </div>
+            </>
+          ) : null}
+        </div>
+        <div className="modal-footer">
+          <button type="button" className="button button-quiet" onClick={onClose}>Đóng</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PaymentModal({ invoice, onClose, onSuccess }: { invoice: Invoice; onClose: () => void; onSuccess: () => void }) {
+  const [method, setMethod] = useState<"CASH" | "BANK_TRANSFER">("BANK_TRANSFER");
+  const [amount, setAmount] = useState(invoice.balance_due);
+  const [reference, setReference] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError("");
+    try {
+      const key = crypto.randomUUID();
+      await api("/payments", {
+        method: "POST",
+        headers: { "Idempotency-Key": key },
+        body: JSON.stringify({
+          invoiceId: invoice.id,
+          amount: String(amount),
+          method,
+          reference: reference || null,
+          idempotencyKey: key,
+        }),
+      });
+      onSuccess();
+    } catch (err) {
+      setError((err as Error).message);
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <form className="modal-card" onClick={(e) => e.stopPropagation()} onSubmit={submit}>
+        <div className="modal-header">
+          <h2>Ghi nhận thanh toán - Hóa đơn {invoice.invoice_number}</h2>
+          <button type="button" className="button button-quiet" onClick={onClose}>✕</button>
+        </div>
+        <div className="modal-body">
+          <div style={{ background: "#f8fafc", padding: "10px", borderRadius: "4px", fontSize: "12px" }}>
+            Căn hộ: <strong>{invoice.apartment_code}</strong> · Còn phải thu: <strong style={{ color: "#b91c1c" }}>{money(invoice.balance_due)}</strong>
+          </div>
+          <label style={{ display: "grid", gap: "6px", fontSize: "11px", fontWeight: 600 }}>
+            Phương thức thanh toán
+            <select value={method} onChange={(e) => setMethod(e.target.value as "CASH" | "BANK_TRANSFER")}>
+              <option value="BANK_TRANSFER">Chuyển khoản ngân hàng</option>
+              <option value="CASH">Tiền mặt</option>
+            </select>
+          </label>
+          <label style={{ display: "grid", gap: "6px", fontSize: "11px", fontWeight: 600 }}>
+            Số tiền thanh toán (₫)
+            <input
+              type="number"
+              step="1"
+              min="1000"
+              max={invoice.balance_due}
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              required
+            />
+          </label>
+          <label style={{ display: "grid", gap: "6px", fontSize: "11px", fontWeight: 600 }}>
+            Mã tham chiếu / Ghi chú (VD: Số GD ngân hàng)
+            <input
+              value={reference}
+              onChange={(e) => setReference(e.target.value)}
+              placeholder="VD: FT26110892837"
+            />
+          </label>
+          {error && <ErrorBanner message={error} />}
+        </div>
+        <div className="modal-footer">
+          <button type="button" className="button button-quiet" onClick={onClose} disabled={busy}>Hủy</button>
+          <button type="submit" className="button button-primary" disabled={busy}>
+            {busy ? "Đang xử lý…" : "Xác nhận thu tiền"}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+function PeoplePage({ canManage, notify }: { canManage: boolean; notify: (message: string) => void }) {
   const apartments = useRemote<Apartment[]>("/apartments", "apartments");
   const [apartmentId, setApartmentId] = useState("");
   const [kind, setKind] = useState<"owners" | "residents">("owners");
   const people = useRemote<Record<string, unknown>[]>(apartmentId ? `/apartments/${apartmentId}/${kind}` : "", kind);
-  return <><PageHeading title="Chủ sở hữu và cư dân" subtitle="Mối quan hệ với căn hộ được lưu riêng và có thời hạn hiệu lực." />
-    <div className="toolbar-row"><label className="select-label">Căn hộ<select value={apartmentId} onChange={(event) => setApartmentId(event.target.value)}><option value="">Chọn căn hộ</option>{(apartments.data ?? []).map((unit) => <option key={unit.id} value={unit.id}>{unit.building_name} · {unit.code}</option>)}</select></label><div className="segmented"><button className={kind === "owners" ? "segment-active" : ""} onClick={() => setKind("owners")}>Chủ sở hữu</button><button className={kind === "residents" ? "segment-active" : ""} onClick={() => setKind("residents")}>Cư dân</button></div></div>
-    <section className="surface table-surface"><div className="table-header"><h2>{kind === "owners" ? "Lịch sử sở hữu" : "Danh sách cư trú"}</h2><span>{people.data?.length ?? 0} hồ sơ</span></div>{!apartmentId ? <EmptyState title="Chọn một căn hộ" text="Thông tin chủ sở hữu và cư dân được giới hạn theo từng căn hộ." /> : people.loading ? <LoadingLine /> : people.error ? <ErrorBanner message={people.error} /> : people.data?.length ? <div className="table-scroll"><table><thead><tr><th>Họ và tên</th><th>Email</th><th>Điện thoại</th><th>Quan hệ</th><th>Hiệu lực</th></tr></thead><tbody>{people.data.map((person, index) => <tr key={String(person.id ?? index)}><td><strong className="table-primary">{String(person.full_name ?? "—")}</strong></td><td>{String(person.email ?? "—")}</td><td>{String(person.phone ?? "—")}</td><td>{String(person.relationship ?? (person.ownership_percent ? `${person.ownership_percent}% sở hữu` : "—"))}</td><td>{String(person.valid_from ?? "—")} {person.valid_to ? `đến ${String(person.valid_to)}` : "· Hiện tại"}</td></tr>)}</tbody></table></div> : <EmptyState title="Chưa có hồ sơ liên kết" text="Chưa ghi nhận chủ sở hữu hoặc cư dân cho căn hộ này." />}</section>
-  </>;
+  const [openAdd, setOpenAdd] = useState(false);
+  const [error, setError] = useState("");
+
+  async function submitOwner(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setError("");
+    const form = new FormData(e.currentTarget);
+    try {
+      await api(`/apartments/${apartmentId}/owners`, {
+        method: "POST",
+        body: JSON.stringify({
+          fullName: form.get("fullName"),
+          email: form.get("email") || null,
+          phone: form.get("phone") || null,
+          ownershipPercent: Number(form.get("ownershipPercent") || 100),
+          validFrom: form.get("validFrom"),
+        }),
+      });
+      (e.currentTarget as HTMLFormElement).reset();
+      setOpenAdd(false);
+      people.reload();
+      notify("Đã thêm chủ sở hữu thành công.");
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
+  async function submitResident(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setError("");
+    const form = new FormData(e.currentTarget);
+    try {
+      await api(`/apartments/${apartmentId}/residents`, {
+        method: "POST",
+        body: JSON.stringify({
+          fullName: form.get("fullName"),
+          email: form.get("email") || null,
+          phone: form.get("phone") || null,
+          relationship: form.get("relationship"),
+          canViewBills: form.get("canViewBills") === "on",
+          canPayBills: form.get("canPayBills") === "on",
+          validFrom: form.get("validFrom"),
+        }),
+      });
+      (e.currentTarget as HTMLFormElement).reset();
+      setOpenAdd(false);
+      people.reload();
+      notify("Đã đăng ký cư dân thành công.");
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
+  async function endRelation(id: string) {
+    if (!confirm("Bạn có chắc chắn muốn kết thúc quan hệ cư trú/sở hữu này?")) return;
+    try {
+      await api(`/apartments/${apartmentId}/${kind}/${id}/end`, { method: "POST" });
+      people.reload();
+      notify("Đã kết thúc hiệu lực thành công.");
+    } catch (err) {
+      notify(`Lỗi: ${(err as Error).message}`);
+    }
+  }
+
+  return (
+    <>
+      <PageHeading
+        title="Chủ sở hữu & Cư dân"
+        subtitle="Quản lý hồ sơ cư trú, tỷ lệ sở hữu và phân quyền thanh toán hóa đơn."
+        action={
+          canManage && apartmentId ? (
+            <button className="button button-primary" onClick={() => setOpenAdd(!openAdd)}>
+              <Icon name="plus" /> {kind === "owners" ? "Thêm chủ sở hữu" : "Đăng ký cư dân"}
+            </button>
+          ) : undefined
+        }
+      />
+
+      <div className="toolbar-row">
+        <label className="select-label">
+          Căn hộ
+          <select value={apartmentId} onChange={(event) => setApartmentId(event.target.value)}>
+            <option value="">Chọn căn hộ</option>
+            {(apartments.data ?? []).map((unit) => (
+              <option key={unit.id} value={unit.id}>
+                {unit.building_name} · {unit.code}
+              </option>
+            ))}
+          </select>
+        </label>
+        <div className="segmented">
+          <button className={kind === "owners" ? "segment-active" : ""} onClick={() => setKind("owners")}>
+            Chủ sở hữu
+          </button>
+          <button className={kind === "residents" ? "segment-active" : ""} onClick={() => setKind("residents")}>
+            Cư dân
+          </button>
+        </div>
+      </div>
+
+      {openAdd && apartmentId && kind === "owners" && (
+        <form className="surface inline-form" onSubmit={submitOwner}>
+          <h2>Thêm chủ sở hữu cho căn hộ</h2>
+          <label>
+            Họ và tên *
+            <input name="fullName" required placeholder="Nguyễn Văn A" />
+          </label>
+          <label>
+            Email
+            <input type="email" name="email" placeholder="owner@example.com" />
+          </label>
+          <label>
+            Số điện thoại
+            <input name="phone" placeholder="0901234567" />
+          </label>
+          <label>
+            Tỷ lệ sở hữu (%) *
+            <input type="number" name="ownershipPercent" required min="1" max="100" defaultValue="100" />
+          </label>
+          <label>
+            Ngày bắt đầu hiệu lực *
+            <input type="date" name="validFrom" required defaultValue={new Date().toISOString().slice(0, 10)} />
+          </label>
+          {error && <ErrorBanner message={error} />}
+          <button className="button button-primary">Lưu chủ sở hữu</button>
+        </form>
+      )}
+
+      {openAdd && apartmentId && kind === "residents" && (
+        <form className="surface inline-form" onSubmit={submitResident}>
+          <h2>Đăng ký cư dân cư trú</h2>
+          <label>
+            Họ và tên *
+            <input name="fullName" required placeholder="Trần Thị B" />
+          </label>
+          <label>
+            Email
+            <input type="email" name="email" placeholder="resident@example.com" />
+          </label>
+          <label>
+            Số điện thoại
+            <input name="phone" placeholder="0912345678" />
+          </label>
+          <label>
+            Quan hệ với chủ hộ *
+            <select name="relationship" defaultValue="TENANT">
+              <option value="OWNER">Bản thân chủ sở hữu</option>
+              <option value="FAMILY">Người trong gia đình</option>
+              <option value="TENANT">Khách thuê nhà</option>
+              <option value="OTHER">Khác</option>
+            </select>
+          </label>
+          <label>
+            Ngày bắt đầu cư trú *
+            <input type="date" name="validFrom" required defaultValue={new Date().toISOString().slice(0, 10)} />
+          </label>
+          <div style={{ display: "flex", gap: "20px", alignItems: "center", gridColumn: "1/-1", padding: "8px 0" }}>
+            <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer" }}>
+              <input type="checkbox" name="canViewBills" defaultChecked />
+              <span>Cho phép xem hóa đơn</span>
+            </label>
+            <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer" }}>
+              <input type="checkbox" name="canPayBills" defaultChecked />
+              <span>Cho phép nộp tiền hóa đơn</span>
+            </label>
+          </div>
+          {error && <ErrorBanner message={error} />}
+          <button className="button button-primary">Lưu cư dân</button>
+        </form>
+      )}
+
+      <section className="surface table-surface">
+        <div className="table-header">
+          <h2>{kind === "owners" ? "Lịch sử & Danh sách sở hữu" : "Danh sách cư trú hiện tại"}</h2>
+          <span>{people.data?.length ?? 0} hồ sơ</span>
+        </div>
+        {!apartmentId ? (
+          <EmptyState title="Chọn một căn hộ" text="Thông tin chủ sở hữu và cư dân được giới hạn theo từng căn hộ." />
+        ) : people.loading ? (
+          <LoadingLine />
+        ) : people.error ? (
+          <ErrorBanner message={people.error} />
+        ) : people.data?.length ? (
+          <div className="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Họ và tên</th>
+                  <th>Email</th>
+                  <th>Điện thoại</th>
+                  <th>{kind === "owners" ? "Tỷ lệ sở hữu" : "Quan hệ / Quyền"}</th>
+                  <th>Hiệu lực</th>
+                  {canManage && <th>Thao tác</th>}
+                </tr>
+              </thead>
+              <tbody>
+                {people.data.map((person, index) => (
+                  <tr key={String(person.id ?? index)}>
+                    <td><strong className="table-primary">{String(person.full_name ?? "—")}</strong></td>
+                    <td>{String(person.email ?? "—")}</td>
+                    <td>{String(person.phone ?? "—")}</td>
+                    <td>
+                      {kind === "owners" ? (
+                        <span style={{ fontWeight: 600 }}>{String(person.ownership_percent ?? "100")}% sở hữu</span>
+                      ) : (
+                        <div>
+                          <strong>{String(person.relationship ?? "TENANT")}</strong>
+                          <div style={{ fontSize: "10px", color: "#64748b" }}>
+                            {person.can_view_bills ? "✓ Xem bill" : "✗ Không xem bill"} · {person.can_pay_bills ? "✓ Trả tiền" : "✗ Không trả tiền"}
+                          </div>
+                        </div>
+                      )}
+                    </td>
+                    <td>
+                      {String(person.valid_from ?? "—")} {person.valid_to ? `đến ${String(person.valid_to)}` : "· Hiện tại"}
+                    </td>
+                    {canManage && (
+                      <td>
+                        {!person.valid_to && (
+                          <button
+                            className="button button-quiet"
+                            style={{ fontSize: "11px", padding: "4px 8px", color: "#b91c1c" }}
+                            onClick={() => endRelation(String(person.id))}
+                          >
+                            Kết thúc
+                          </button>
+                        )}
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <EmptyState title="Chưa có hồ sơ liên kết" text="Chưa ghi nhận chủ sở hữu hoặc cư dân cho căn hộ này. Bấm Thêm để tạo mới." />
+        )}
+      </section>
+    </>
+  );
 }
 
-function InvoicesPage() {
+function InvoicesPage({ canManage, notify }: { canManage: boolean; notify: (message: string) => void }) {
+  const [tab, setTab] = useState<"invoices" | "periods">("invoices");
   const invoices = useRemote<Invoice[]>("/invoices", "invoices");
-  return <><PageHeading title="Hóa đơn và công nợ" subtitle="Theo dõi số đã lập, đã thanh toán và còn phải thu." />
-    <section className="surface table-surface"><div className="table-header"><h2>Hóa đơn</h2><button className="button button-quiet" onClick={invoices.reload}>Làm mới</button></div>{invoices.loading ? <LoadingLine /> : invoices.error ? <ErrorBanner message={invoices.error} /> : invoices.data?.length ? <div className="table-scroll"><table><thead><tr><th>Mã hóa đơn</th><th>Căn hộ</th><th>Hạn thanh toán</th><th>Tổng tiền</th><th>Đã trả</th><th>Còn lại</th><th>Trạng thái</th></tr></thead><tbody>{invoices.data.map((invoice) => <tr key={invoice.id}><td><strong className="table-primary">{invoice.invoice_number}</strong></td><td>{invoice.apartment_code}</td><td>{date(invoice.due_date)}</td><td>{money(invoice.total_amount)}</td><td>{money(invoice.paid_amount)}</td><td><strong>{money(invoice.balance_due)}</strong></td><td><StatusTag value={invoice.status} /></td></tr>)}</tbody></table></div> : <EmptyState title="Chưa có hóa đơn" text="Hóa đơn xuất hiện sau khi kế toán tạo và phát hành kỳ thu." />}</section>
-  </>;
+  const periods = useRemote<BillingPeriod[]>("/billing-periods", "billingPeriods");
+  const buildings = useRemote<Building[]>("/buildings", "buildings");
+
+  const [selectedInvoiceForDetail, setSelectedInvoiceForDetail] = useState<string | null>(null);
+  const [selectedInvoiceForPay, setSelectedInvoiceForPay] = useState<Invoice | null>(null);
+  const [openCreatePeriod, setOpenCreatePeriod] = useState(false);
+  const [periodError, setPeriodError] = useState("");
+  const [busyAction, setBusyAction] = useState<string | null>(null);
+
+  async function createPeriod(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setPeriodError("");
+    const form = new FormData(e.currentTarget);
+    try {
+      await api("/billing-periods", {
+        method: "POST",
+        body: JSON.stringify({
+          buildingId: form.get("buildingId"),
+          periodStart: form.get("periodStart"),
+          periodEnd: form.get("periodEnd"),
+          dueDate: form.get("dueDate"),
+        }),
+      });
+      (e.currentTarget as HTMLFormElement).reset();
+      setOpenCreatePeriod(false);
+      periods.reload();
+      notify("Đã tạo kỳ thu phí mới.");
+    } catch (err) {
+      setPeriodError((err as Error).message);
+    }
+  }
+
+  async function generateInvoices(periodId: string) {
+    setBusyAction(`gen-${periodId}`);
+    try {
+      const res = await api<ApiResult<{ generatedCount: number }>>(`/billing-periods/${periodId}/generate`, { method: "POST" });
+      periods.reload();
+      invoices.reload();
+      notify(`Đã tự động tính toán và tạo ${res.data?.generatedCount ?? 0} hóa đơn.`);
+    } catch (err) {
+      notify(`Lỗi sinh hóa đơn: ${(err as Error).message}`);
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
+  async function issuePeriod(periodId: string) {
+    setBusyAction(`issue-${periodId}`);
+    try {
+      await api(`/billing-periods/${periodId}/issue`, { method: "POST" });
+      periods.reload();
+      invoices.reload();
+      notify("Đã phát hành hóa đơn của kỳ thu thành công tới cư dân!");
+    } catch (err) {
+      notify(`Lỗi phát hành: ${(err as Error).message}`);
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
+  return (
+    <>
+      <PageHeading
+        title="Hóa đơn & Kỳ thu phí"
+        subtitle="Quản lý kỳ thu, tính toán tiền điện/nước/phí tự động và theo dõi công nợ."
+        action={
+          canManage && tab === "periods" ? (
+            <button className="button button-primary" onClick={() => setOpenCreatePeriod(!openCreatePeriod)}>
+              <Icon name="plus" /> Mở kỳ thu phí mới
+            </button>
+          ) : undefined
+        }
+      />
+
+      <div className="toolbar-row">
+        <div className="segmented">
+          <button className={tab === "invoices" ? "segment-active" : ""} onClick={() => setTab("invoices")}>
+            Danh sách hóa đơn ({invoices.data?.length ?? 0})
+          </button>
+          <button className={tab === "periods" ? "segment-active" : ""} onClick={() => setTab("periods")}>
+            Kỳ thu phí & Lập hóa đơn tự động ({periods.data?.length ?? 0})
+          </button>
+        </div>
+      </div>
+
+      {tab === "periods" && (
+        <>
+          {openCreatePeriod && (
+            <form className="surface inline-form" onSubmit={createPeriod}>
+              <h2>Tạo kỳ thu phí mới</h2>
+              <label>
+                Tòa nhà
+                <select name="buildingId" required>
+                  <option value="">Chọn tòa nhà</option>
+                  {(buildings.data ?? []).map((b) => (
+                    <option key={b.id} value={b.id}>{b.name}</option>
+                  ))}
+                </select>
+              </label>
+              <div className="form-row">
+                <label>
+                  Từ ngày
+                  <input type="date" name="periodStart" required defaultValue={new Date().toISOString().slice(0, 7) + "-01"} />
+                </label>
+                <label>
+                  Đến ngày
+                  <input type="date" name="periodEnd" required defaultValue={new Date().toISOString().slice(0, 10)} />
+                </label>
+              </div>
+              <label>
+                Hạn thanh toán
+                <input type="date" name="dueDate" required defaultValue={new Date(Date.now() + 15 * 86400000).toISOString().slice(0, 10)} />
+              </label>
+              {periodError && <ErrorBanner message={periodError} />}
+              <button className="button button-primary">Tạo kỳ thu phí</button>
+            </form>
+          )}
+
+          <section className="surface table-surface">
+            <div className="table-header">
+              <h2>Danh sách kỳ thu phí</h2>
+              <button className="button button-quiet" onClick={periods.reload}>Làm mới</button>
+            </div>
+            {periods.loading ? (
+              <LoadingLine />
+            ) : periods.error ? (
+              <ErrorBanner message={periods.error} />
+            ) : periods.data?.length ? (
+              <div className="table-scroll">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Tòa nhà</th>
+                      <th>Kỳ phí</th>
+                      <th>Hạn thanh toán</th>
+                      <th>Số hóa đơn</th>
+                      <th>Tổng tiền</th>
+                      <th>Trạng thái</th>
+                      {canManage && <th>Thao tác</th>}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {periods.data.map((p) => (
+                      <tr key={p.id}>
+                        <td><strong className="table-primary">{p.building_name}</strong></td>
+                        <td>{date(p.period_start)} – {date(p.period_end)}</td>
+                        <td>{date(p.due_date)}</td>
+                        <td>{p.invoice_count} hóa đơn</td>
+                        <td><strong>{money(p.total_amount)}</strong></td>
+                        <td><StatusTag value={p.status} /></td>
+                        {canManage && (
+                          <td style={{ display: "flex", gap: "6px" }}>
+                            {p.status === "DRAFT" && (
+                              <button
+                                className="button button-primary"
+                                style={{ fontSize: "11px", padding: "4px 8px" }}
+                                disabled={busyAction === `gen-${p.id}`}
+                                onClick={() => generateInvoices(p.id)}
+                              >
+                                {busyAction === `gen-${p.id}` ? "Đang tính..." : "Sinh hóa đơn tự động"}
+                              </button>
+                            )}
+                            {p.status === "GENERATED" && (
+                              <>
+                                <button
+                                  className="button button-primary"
+                                  style={{ fontSize: "11px", padding: "4px 8px" }}
+                                  disabled={busyAction === `issue-${p.id}`}
+                                  onClick={() => issuePeriod(p.id)}
+                                >
+                                  {busyAction === `issue-${p.id}` ? "Đang phát hành..." : "Phát hành hóa đơn"}
+                                </button>
+                                <button
+                                  className="button button-quiet"
+                                  style={{ fontSize: "11px", padding: "4px 8px" }}
+                                  disabled={busyAction === `gen-${p.id}`}
+                                  onClick={() => generateInvoices(p.id)}
+                                >
+                                  Tính lại
+                                </button>
+                              </>
+                            )}
+                            {p.status === "ISSUED" && (
+                              <span style={{ fontSize: "11px", color: "#15803d", fontWeight: 600 }}>✓ Đã phát hành</span>
+                            )}
+                          </td>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <EmptyState title="Chưa có kỳ thu phí" text="Tạo kỳ thu mới để hệ thống tự động quét diện tích căn hộ, số điện nước và sinh hóa đơn." />
+            )}
+          </section>
+        </>
+      )}
+
+      {tab === "invoices" && (
+        <section className="surface table-surface">
+          <div className="table-header">
+            <h2>Hóa đơn căn hộ</h2>
+            <button className="button button-quiet" onClick={invoices.reload}>Làm mới</button>
+          </div>
+          {invoices.loading ? (
+            <LoadingLine />
+          ) : invoices.error ? (
+            <ErrorBanner message={invoices.error} />
+          ) : invoices.data?.length ? (
+            <div className="table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Mã hóa đơn</th>
+                    <th>Căn hộ</th>
+                    <th>Hạn thanh toán</th>
+                    <th>Tổng tiền</th>
+                    <th>Đã trả</th>
+                    <th>Còn lại</th>
+                    <th>Trạng thái</th>
+                    <th>Thao tác</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {invoices.data.map((invoice) => (
+                    <tr key={invoice.id}>
+                      <td><strong className="table-primary">{invoice.invoice_number}</strong></td>
+                      <td>{invoice.apartment_code}</td>
+                      <td>{date(invoice.due_date)}</td>
+                      <td>{money(invoice.total_amount)}</td>
+                      <td>{money(invoice.paid_amount)}</td>
+                      <td><strong style={{ color: Number(invoice.balance_due) > 0 ? "#b91c1c" : "#15803d" }}>{money(invoice.balance_due)}</strong></td>
+                      <td><StatusTag value={invoice.status} /></td>
+                      <td style={{ display: "flex", gap: "6px" }}>
+                        <button
+                          className="button button-quiet"
+                          style={{ fontSize: "11px", padding: "4px 8px" }}
+                          onClick={() => setSelectedInvoiceForDetail(invoice.id)}
+                        >
+                          Chi tiết
+                        </button>
+                        {canManage && Number(invoice.balance_due) > 0 && invoice.status !== "DRAFT" && (
+                          <button
+                            className="button button-primary"
+                            style={{ fontSize: "11px", padding: "4px 8px" }}
+                            onClick={() => setSelectedInvoiceForPay(invoice)}
+                          >
+                            Thu tiền
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <EmptyState title="Chưa có hóa đơn" text="Hóa đơn xuất hiện sau khi tạo kỳ thu và ấn Sinh hóa đơn tự động." />
+          )}
+        </section>
+      )}
+
+      {selectedInvoiceForDetail && (
+        <InvoiceDetailModal
+          invoiceId={selectedInvoiceForDetail}
+          onClose={() => setSelectedInvoiceForDetail(null)}
+        />
+      )}
+
+      {selectedInvoiceForPay && (
+        <PaymentModal
+          invoice={selectedInvoiceForPay}
+          onClose={() => setSelectedInvoiceForPay(null)}
+          onSuccess={() => {
+            setSelectedInvoiceForPay(null);
+            invoices.reload();
+            notify("Đã ghi nhận thanh toán thành công!");
+          }}
+        />
+      )}
+    </>
+  );
 }
 
 function MaintenancePage({ canManage, notify }: { canManage: boolean; notify: (message: string) => void }) {
@@ -267,11 +1007,448 @@ function NoticesPage({ canManage, notify }: { canManage: boolean; notify: (messa
   </>;
 }
 
+function UtilityReadingsPage({ canManage, notify }: { canManage: boolean; notify: (message: string) => void }) {
+  const readings = useRemote<UtilityReading[]>("/utility-readings", "readings");
+  const apartments = useRemote<Apartment[]>("/apartments", "apartments");
+  const [open, setOpen] = useState(false);
+  const [error, setError] = useState("");
+
+  const [elecPrev, setElecPrev] = useState(0);
+  const [elecCurr, setElecCurr] = useState(0);
+  const [waterPrev, setWaterPrev] = useState(0);
+  const [waterCurr, setWaterCurr] = useState(0);
+
+  const elecUsage = Math.max(0, elecCurr - elecPrev);
+  const waterUsage = Math.max(0, waterCurr - waterPrev);
+
+  async function submit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError("");
+    const form = new FormData(event.currentTarget);
+    try {
+      await api("/utility-readings", {
+        method: "POST",
+        body: JSON.stringify({
+          apartmentId: form.get("apartmentId"),
+          periodStart: form.get("periodStart"),
+          periodEnd: form.get("periodEnd"),
+          electricPrevious: form.get("electricPrevious"),
+          electricCurrent: form.get("electricCurrent"),
+          waterPrevious: form.get("waterPrevious"),
+          waterCurrent: form.get("waterCurrent"),
+          note: form.get("note"),
+        }),
+      });
+      (event.currentTarget as HTMLFormElement).reset();
+      setOpen(false);
+      readings.reload();
+      notify("Đã lưu chỉ số điện nước thành công.");
+    } catch (reason) {
+      setError((reason as Error).message);
+    }
+  }
+
+  return (
+    <>
+      <PageHeading
+        title="Chỉ số điện & nước"
+        subtitle="Ghi nhận số công tơ định kỳ hàng tháng để làm cơ sở tự động tính hóa đơn."
+        action={
+          canManage ? (
+            <button className="button button-primary" onClick={() => setOpen(!open)}>
+              <Icon name="plus" /> Ghi chỉ số mới
+            </button>
+          ) : undefined
+        }
+      />
+      {open && (
+        <form className="surface inline-form" onSubmit={submit}>
+          <h2>Ghi chỉ số điện nước tháng</h2>
+          <label>
+            Căn hộ *
+            <select name="apartmentId" required>
+              <option value="">Chọn căn hộ</option>
+              {(apartments.data ?? []).map((item) => (
+                <option value={item.id} key={item.id}>
+                  {item.building_name} · {item.code}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="form-row">
+            <label>
+              Từ ngày *
+              <input type="date" name="periodStart" required defaultValue={new Date().toISOString().slice(0, 7) + "-01"} />
+            </label>
+            <label>
+              Đến ngày *
+              <input type="date" name="periodEnd" required defaultValue={new Date().toISOString().slice(0, 10)} />
+            </label>
+          </div>
+          <div className="form-row">
+            <label>
+              Điện kỳ trước (kWh) *
+              <input
+                type="number"
+                step="1"
+                min="0"
+                name="electricPrevious"
+                required
+                onChange={(e) => setElecPrev(Number(e.target.value) || 0)}
+              />
+            </label>
+            <label>
+              Điện kỳ này (kWh) *
+              <input
+                type="number"
+                step="1"
+                min="0"
+                name="electricCurrent"
+                required
+                onChange={(e) => setElecCurr(Number(e.target.value) || 0)}
+              />
+            </label>
+          </div>
+          <div style={{ background: "#f8fafc", padding: "8px 12px", borderRadius: "4px", fontSize: "11px", gridColumn: "1/-1" }}>
+            Tiêu thụ điện dự kiến: <strong style={{ color: "#d97706" }}>{elecUsage} kWh</strong>
+          </div>
+          <div className="form-row">
+            <label>
+              Nước kỳ trước (m³) *
+              <input
+                type="number"
+                step="1"
+                min="0"
+                name="waterPrevious"
+                required
+                onChange={(e) => setWaterPrev(Number(e.target.value) || 0)}
+              />
+            </label>
+            <label>
+              Nước kỳ này (m³) *
+              <input
+                type="number"
+                step="1"
+                min="0"
+                name="waterCurrent"
+                required
+                onChange={(e) => setWaterCurr(Number(e.target.value) || 0)}
+              />
+            </label>
+          </div>
+          <div style={{ background: "#f8fafc", padding: "8px 12px", borderRadius: "4px", fontSize: "11px", gridColumn: "1/-1" }}>
+            Tiêu thụ nước dự kiến: <strong style={{ color: "#0284c7" }}>{waterUsage} m³</strong>
+          </div>
+          <label style={{ gridColumn: "1/-1" }}>
+            Ghi chú
+            <input name="note" placeholder="VD: Công tơ hoạt động bình thường" />
+          </label>
+          {error && <ErrorBanner message={error} />}
+          <button className="button button-primary">Lưu chỉ số</button>
+        </form>
+      )}
+
+      <section className="surface table-surface">
+        <div className="table-header">
+          <h2>Lịch sử chỉ số công tơ</h2>
+          <button className="button button-quiet" onClick={readings.reload}>Làm mới</button>
+        </div>
+        {readings.loading ? (
+          <LoadingLine />
+        ) : readings.error ? (
+          <ErrorBanner message={readings.error} />
+        ) : readings.data?.length ? (
+          <div className="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Căn hộ</th>
+                  <th>Kỳ chốt</th>
+                  <th>Điện (Cũ → Mới)</th>
+                  <th>Tiêu thụ Điện</th>
+                  <th>Nước (Cũ → Mới)</th>
+                  <th>Tiêu thụ Nước</th>
+                  <th>Ghi chú</th>
+                </tr>
+              </thead>
+              <tbody>
+                {readings.data.map((item) => {
+                  const eUsage = Number(item.electric_current) - Number(item.electric_previous);
+                  const wUsage = Number(item.water_current) - Number(item.water_previous);
+                  return (
+                    <tr key={item.id}>
+                      <td><strong className="table-primary">{item.apartment_code}</strong></td>
+                      <td>{date(item.period_start)} – {date(item.period_end)}</td>
+                      <td>{item.electric_previous} → {item.electric_current}</td>
+                      <td><strong style={{ color: "#d97706" }}>{eUsage} kWh</strong></td>
+                      <td>{item.water_previous} → {item.water_current}</td>
+                      <td><strong style={{ color: "#0284c7" }}>{wUsage} m³</strong></td>
+                      <td><small>{item.note || "—"}</small></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <EmptyState title="Chưa có dữ liệu" text="Ghi nhận chỉ số điện nước hàng tháng để tự động xuất hóa đơn." />
+        )}
+      </section>
+    </>
+  );
+}
+
+function FeeTypesPage({ canManage, notify }: { canManage: boolean; notify: (message: string) => void }) {
+  const feeTypes = useRemote<FeeType[]>("/fee-types", "feeTypes");
+  const buildings = useRemote<Building[]>("/buildings", "buildings");
+  const [open, setOpen] = useState(false);
+  const [error, setError] = useState("");
+
+  const methodLabels: Record<string, { label: string; unit: string }> = {
+    PER_SQM: { label: "Theo diện tích căn hộ", unit: "₫ / m² / tháng" },
+    ELECTRICITY: { label: "Điện sinh hoạt", unit: "₫ / kWh" },
+    WATER: { label: "Nước sinh hoạt", unit: "₫ / m³" },
+    FIXED: { label: "Cố định mỗi căn hộ", unit: "₫ / căn / tháng" },
+    MANUAL: { label: "Nhập tay từng kỳ", unit: "₫" },
+  };
+
+  async function submit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError("");
+    const form = new FormData(event.currentTarget);
+    try {
+      await api("/fee-types", {
+        method: "POST",
+        body: JSON.stringify({
+          buildingId: form.get("buildingId"),
+          code: form.get("code"),
+          name: form.get("name"),
+          calculationMethod: form.get("calculationMethod"),
+          unitPrice: form.get("unitPrice"),
+        }),
+      });
+      (event.currentTarget as HTMLFormElement).reset();
+      setOpen(false);
+      feeTypes.reload();
+      notify("Đã lưu biểu phí thành công.");
+    } catch (reason) {
+      setError((reason as Error).message);
+    }
+  }
+
+  return (
+    <>
+      <PageHeading
+        title="Biểu phí dịch vụ & Đơn giá"
+        subtitle="Cấu hình đơn giá phí quản lý, đơn giá điện, nước và dịch vụ áp dụng tự động cho hóa đơn."
+        action={
+          canManage ? (
+            <button className="button button-primary" onClick={() => setOpen(!open)}>
+              <Icon name="plus" /> Thêm biểu phí
+            </button>
+          ) : undefined
+        }
+      />
+      {open && (
+        <form className="surface inline-form" onSubmit={submit}>
+          <h2>Thêm loại phí mới</h2>
+          <label>
+            Tòa nhà *
+            <select name="buildingId" required>
+              <option value="">Chọn tòa nhà</option>
+              {(buildings.data ?? []).map((item) => (
+                <option value={item.id} key={item.id}>{item.name}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Mã loại phí *
+            <input name="code" required placeholder="VD: DIEN-SH, NUOC-SH, QL-SQM" />
+          </label>
+          <label>
+            Tên biểu phí *
+            <input name="name" required placeholder="VD: Tiền điện sinh hoạt" />
+          </label>
+          <label>
+            Phương pháp tính *
+            <select name="calculationMethod">
+              <option value="PER_SQM">Theo diện tích (m²)</option>
+              <option value="ELECTRICITY">Chỉ số điện (kWh)</option>
+              <option value="WATER">Chỉ số nước (m³)</option>
+              <option value="FIXED">Cố định hàng tháng</option>
+            </select>
+          </label>
+          <label>
+            Đơn giá (VNĐ) *
+            <input type="number" name="unitPrice" required min="0" placeholder="VD: 3000" />
+          </label>
+          {error && <ErrorBanner message={error} />}
+          <button className="button button-primary">Lưu biểu phí</button>
+        </form>
+      )}
+
+      <section className="surface table-surface">
+        <div className="table-header">
+          <h2>Danh sách biểu phí áp dụng</h2>
+          <button className="button button-quiet" onClick={feeTypes.reload}>Làm mới</button>
+        </div>
+        {feeTypes.loading ? (
+          <LoadingLine />
+        ) : feeTypes.error ? (
+          <ErrorBanner message={feeTypes.error} />
+        ) : feeTypes.data?.length ? (
+          <div className="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Mã phí</th>
+                  <th>Tên phí</th>
+                  <th>Phương pháp tính</th>
+                  <th>Đơn giá</th>
+                  <th>Đơn vị tính</th>
+                  <th>Trạng thái</th>
+                </tr>
+              </thead>
+              <tbody>
+                {feeTypes.data.map((item) => {
+                  const meta = methodLabels[item.calculation_method] ?? { label: item.calculation_method, unit: "₫" };
+                  return (
+                    <tr key={item.id}>
+                      <td><strong className="table-primary">{item.code}</strong></td>
+                      <td>{item.name}</td>
+                      <td>{meta.label}</td>
+                      <td><strong>{money(item.unit_price)}</strong></td>
+                      <td><small style={{ color: "#64748b" }}>{meta.unit}</small></td>
+                      <td>
+                        <span style={{ color: item.active ? "#15803d" : "#64748b", fontWeight: 600, fontSize: "11px" }}>
+                          {item.active ? "● Đang áp dụng" : "○ Tạm dừng"}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <EmptyState title="Chưa có biểu phí" text="Cấu hình biểu phí để hệ thống tự động tính thành tiền trong kỳ thu." />
+        )}
+      </section>
+    </>
+  );
+}
+
 function ResidentPage({ page, setPage, notify }: { page: PageId; setPage: (page: PageId) => void; notify: (message: string) => void }) {
   if (page === "invoices") return <ResidentInvoices />;
   if (page === "maintenance") return <ResidentMaintenance notify={notify} />;
   if (page === "notices") return <ResidentNotices notify={notify} />;
+  if (page === "utility-readings") return <ResidentUtilityReadings />;
+  if (page === "fee-types") return <ResidentFeeTypes />;
   return <ResidentDashboard setPage={setPage} />;
+}
+
+function ResidentUtilityReadings() {
+  const readings = useRemote<UtilityReading[]>("/utility-readings", "readings");
+  return (
+    <>
+      <PageHeading title="Lịch sử số điện & nước" subtitle="Theo dõi mức tiêu thụ điện nước thực tế của căn hộ qua các kỳ." />
+      <section className="surface table-surface">
+        <div className="table-header">
+          <h2>Chỉ số công tơ</h2>
+          <button className="button button-quiet" onClick={readings.reload}>Làm mới</button>
+        </div>
+        {readings.loading ? (
+          <LoadingLine />
+        ) : readings.error ? (
+          <ErrorBanner message={readings.error} />
+        ) : readings.data?.length ? (
+          <div className="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Căn hộ</th>
+                  <th>Kỳ ghi</th>
+                  <th>Điện (Cũ → Mới)</th>
+                  <th>Điện tiêu thụ</th>
+                  <th>Nước (Cũ → Mới)</th>
+                  <th>Nước tiêu thụ</th>
+                </tr>
+              </thead>
+              <tbody>
+                {readings.data.map((item) => {
+                  const eUsage = Number(item.electric_current) - Number(item.electric_previous);
+                  const wUsage = Number(item.water_current) - Number(item.water_previous);
+                  return (
+                    <tr key={item.id}>
+                      <td><strong className="table-primary">{item.apartment_code}</strong></td>
+                      <td>{date(item.period_start)} – {date(item.period_end)}</td>
+                      <td>{item.electric_previous} → {item.electric_current}</td>
+                      <td><strong style={{ color: "#d97706" }}>{eUsage} kWh</strong></td>
+                      <td>{item.water_previous} → {item.water_current}</td>
+                      <td><strong style={{ color: "#0284c7" }}>{wUsage} m³</strong></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <EmptyState title="Chưa có dữ liệu chỉ số" text="Ban quản lý chưa cập nhật chỉ số điện nước cho căn hộ của bạn." />
+        )}
+      </section>
+    </>
+  );
+}
+
+function ResidentFeeTypes() {
+  const feeTypes = useRemote<FeeType[]>("/fee-types", "feeTypes");
+  const methodLabels: Record<string, string> = {
+    PER_SQM: "Theo m² diện tích",
+    ELECTRICITY: "Theo kWh điện tiêu thụ",
+    WATER: "Theo m³ nước tiêu thụ",
+    FIXED: "Cố định mỗi căn",
+  };
+  return (
+    <>
+      <PageHeading title="Biểu phí tòa nhà" subtitle="Danh mục các đơn giá dịch vụ đang được áp dụng tại chung cư." />
+      <section className="surface table-surface">
+        <div className="table-header">
+          <h2>Biểu phí công khai</h2>
+          <button className="button button-quiet" onClick={feeTypes.reload}>Làm mới</button>
+        </div>
+        {feeTypes.loading ? (
+          <LoadingLine />
+        ) : feeTypes.error ? (
+          <ErrorBanner message={feeTypes.error} />
+        ) : feeTypes.data?.length ? (
+          <div className="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Mã</th>
+                  <th>Tên khoản phí</th>
+                  <th>Cách tính</th>
+                  <th>Đơn giá</th>
+                </tr>
+              </thead>
+              <tbody>
+                {feeTypes.data.map((item) => (
+                  <tr key={item.id}>
+                    <td><strong className="table-primary">{item.code}</strong></td>
+                    <td>{item.name}</td>
+                    <td>{methodLabels[item.calculation_method] ?? item.calculation_method}</td>
+                    <td><strong>{money(item.unit_price)}</strong></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <EmptyState title="Chưa có biểu phí" text="Biểu phí sẽ hiển thị khi Ban quản lý ban hành đơn giá." />
+        )}
+      </section>
+    </>
+  );
 }
 
 function ResidentDashboard({ setPage }: { setPage: (page: PageId) => void }) {
@@ -292,6 +1469,7 @@ function ResidentDashboard({ setPage }: { setPage: (page: PageId) => void }) {
 
 function ResidentInvoices() {
   const invoices = useRemote<Invoice[]>("/invoices", "invoices");
+  const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(null);
   const [busy, setBusy] = useState("");
   const [message, setMessage] = useState("");
   async function pay(invoice: Invoice) {
@@ -299,11 +1477,13 @@ function ResidentInvoices() {
     try {
       const key = crypto.randomUUID();
       await api("/payments", { method: "POST", headers: { "Idempotency-Key": key }, body: JSON.stringify({ invoiceId: invoice.id, amount: invoice.balance_due, method: "SIMULATED", idempotencyKey: key }) });
-      invoices.reload(); setMessage("Thanh toán mô phỏng thành công.");
+      invoices.reload(); setMessage(`Thanh toán mô phỏng thành công cho hóa đơn ${invoice.invoice_number}.`);
     } catch (reason) { setMessage((reason as Error).message); }
     finally { setBusy(""); }
   }
-  return <><PageHeading title="Hóa đơn của tôi" subtitle="Xem khoản phí và số tiền còn phải thanh toán." />{message && <div className="inline-message" role="status">{message}</div>}{invoices.loading ? <LoadingLine /> : invoices.error ? <ErrorBanner message={invoices.error} /> : invoices.data?.length ? <div className="resident-invoice-list">{invoices.data.map((invoice) => <article className="surface resident-invoice" key={invoice.id}><div className="invoice-symbol"><Icon name="invoice" /></div><div className="invoice-main"><strong>{invoice.invoice_number}</strong><small>Căn {invoice.apartment_code} · Hạn {date(invoice.due_date)}</small><StatusTag value={invoice.status} /></div><div className="invoice-total"><small>Còn phải trả</small><strong>{money(invoice.balance_due)}</strong></div>{Number(invoice.balance_due) > 0 && <button className="button button-primary" disabled={busy === invoice.id} onClick={() => pay(invoice)}>{busy === invoice.id ? "Đang xử lý…" : "Thanh toán mô phỏng"}</button>}</article>)}</div> : <div className="surface"><EmptyState title="Chưa có hóa đơn" text="Hóa đơn sẽ hiển thị sau khi Ban quản lý phát hành kỳ thu." /></div>}</>;
+  return <><PageHeading title="Hóa đơn của tôi" subtitle="Xem bảng kê chi tiết khoản phí và thực hiện thanh toán trực tuyến." />{message && <div className="inline-message" role="status">{message}</div>}{invoices.loading ? <LoadingLine /> : invoices.error ? <ErrorBanner message={invoices.error} /> : invoices.data?.length ? <div className="resident-invoice-list">{invoices.data.map((invoice) => <article className="surface resident-invoice" key={invoice.id}><div className="invoice-symbol"><Icon name="invoice" /></div><div className="invoice-main"><strong>{invoice.invoice_number}</strong><small>Căn {invoice.apartment_code} · Hạn {date(invoice.due_date)}</small><StatusTag value={invoice.status} /></div><div className="invoice-total"><small>Còn phải trả</small><strong style={{ color: Number(invoice.balance_due) > 0 ? "#b91c1c" : "#15803d" }}>{money(invoice.balance_due)}</strong></div><div style={{ display: "flex", gap: "8px" }}><button className="button button-quiet" style={{ fontSize: "11px", padding: "6px 10px" }} onClick={() => setSelectedInvoiceId(invoice.id)}>Xem chi tiết</button>{Number(invoice.balance_due) > 0 && <button className="button button-primary" disabled={busy === invoice.id} onClick={() => pay(invoice)}>{busy === invoice.id ? "Đang xử lý…" : "Thanh toán mô phỏng"}</button>}</div></article>)}</div> : <div className="surface"><EmptyState title="Chưa có hóa đơn" text="Hóa đơn sẽ hiển thị sau khi Ban quản lý phát hành kỳ thu." /></div>}
+    {selectedInvoiceId && <InvoiceDetailModal invoiceId={selectedInvoiceId} onClose={() => setSelectedInvoiceId(null)} />}
+  </>;
 }
 
 function ResidentMaintenance({ notify }: { notify: (message: string) => void }) {
