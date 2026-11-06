@@ -15,8 +15,7 @@
     "db:seed": "tsx src/db/seed.ts",
     "db:seed-demo": "tsx src/db/seed-demo.ts",
     "mock:php": "php -S 127.0.0.1:3000 mock/server.php",
-    "test:mock": "php mock/test.php",
-    "test:sepay": "php mock/test_sepay.php"
+    "test:mock": "php mock/test.php"
   },
   "engines": {
     "node": ">=22"
