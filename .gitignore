@@ -1,7 +1,8 @@
 /.agents
 /AGENTS.md
 /context
-/docs
+# /docs
+task-board.md
 node_modules
 dist
 /.env
