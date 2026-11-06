@@ -1,6 +1,10 @@
 <?php
 // Test runner for mock/server.php
 
+if (file_exists(__DIR__ . '/store.json')) {
+    unlink(__DIR__ . '/store.json');
+}
+
 function simulate(string $method, string $uri, array $body = [], ?string $token = null): array {
     $descriptors = [
         0 => ["pipe", "r"],

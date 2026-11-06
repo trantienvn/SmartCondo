@@ -7,6 +7,7 @@ import adminRoutes from "./modules/admin.routes.js";
 import peopleRoutes from "./modules/people.routes.js";
 import billingRoutes from "./modules/billing.routes.js";
 import operationsRoutes from "./modules/operations.routes.js";
+import sepayRoutes from "./modules/sepay.routes.js";
 
 export function createApp() {
   const app = express();
@@ -57,6 +58,8 @@ export function createApp() {
   app.use(basePath, peopleRoutes);
   app.use(basePath, billingRoutes);
   app.use(basePath, operationsRoutes);
+  app.use(`${basePath}/sepay`, sepayRoutes);
+  app.use("/api.php", sepayRoutes);
 
   app.use((_request, response) => {
     response.status(404).json({

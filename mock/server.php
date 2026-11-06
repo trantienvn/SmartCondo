@@ -12,7 +12,7 @@
 // 1. Phục vụ file tĩnh nếu có yêu cầu trực tiếp
 $rawUri = $_SERVER['REQUEST_URI'] ?? $_ENV['REQUEST_URI'] ?? '/';
 $uri = parse_url($rawUri, PHP_URL_PATH);
-if ($uri !== '/' && file_exists(__DIR__ . $uri)) {
+if ($uri !== '/' && !str_ends_with($uri, '.php') && file_exists(__DIR__ . $uri)) {
     return false;
 }
 
