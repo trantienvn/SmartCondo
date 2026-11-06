@@ -9,9 +9,11 @@ import { money } from "../../utils/format";
 export function FeeTypesPage({
   canManage,
   notify,
+  onBack,
 }: {
   canManage: boolean;
   notify: (message: string) => void;
+  onBack?: () => void;
 }) {
   const feeTypes = useRemote<FeeType[]>("/fee-types", "feeTypes");
   const buildings = useRemote<Building[]>("/buildings", "buildings");
@@ -55,6 +57,8 @@ export function FeeTypesPage({
       <PageHeading
         title="Biểu phí dịch vụ & Đơn giá"
         subtitle="Cấu hình đơn giá phí quản lý, đơn giá điện, nước và dịch vụ áp dụng tự động cho hóa đơn."
+        onBack={onBack}
+        backLabel="Tổng quan"
         action={
           canManage ? (
             <button className="button button-primary" onClick={() => setOpen(!open)}>

@@ -22,13 +22,17 @@ export type AdminPageId =
 
 export function AdminPage({
   page,
+  setPage,
   session,
   notify,
 }: {
   page: AdminPageId;
+  setPage: (page: AdminPageId) => void;
   session: Session;
   notify: (message: string) => void;
 }) {
+  const goOverview = () => setPage("overview");
+
   switch (page) {
     case "buildings":
       return (
@@ -38,25 +42,66 @@ export function AdminPage({
             session.scopes.some((scope) => ["SUPER_ADMIN", "ORG_ADMIN"].includes(scope.role))
           }
           notify={notify}
+          onBack={goOverview}
         />
       );
     case "apartments":
-      return <ApartmentsPage canManage={session.permissions.includes("building:manage")} notify={notify} />;
+      return (
+        <ApartmentsPage
+          canManage={session.permissions.includes("building:manage")}
+          notify={notify}
+          onBack={goOverview}
+        />
+      );
     case "people":
-      return <PeoplePage canManage={session.permissions.includes("people:manage")} notify={notify} />;
+      return (
+        <PeoplePage
+          canManage={session.permissions.includes("people:manage")}
+          notify={notify}
+          onBack={goOverview}
+        />
+      );
     case "invoices":
-      return <InvoicesPage canManage={session.permissions.includes("billing:manage")} notify={notify} />;
+      return (
+        <InvoicesPage
+          canManage={session.permissions.includes("billing:manage")}
+          notify={notify}
+          onBack={goOverview}
+        />
+      );
     case "maintenance":
-      return <MaintenancePage canManage={session.permissions.includes("maintenance:manage")} notify={notify} />;
+      return (
+        <MaintenancePage
+          canManage={session.permissions.includes("maintenance:manage")}
+          notify={notify}
+          onBack={goOverview}
+        />
+      );
     case "notices":
-      return <NoticesPage canManage={session.permissions.includes("notification:manage")} notify={notify} />;
+      return (
+        <NoticesPage
+          canManage={session.permissions.includes("notification:manage")}
+          notify={notify}
+          onBack={goOverview}
+        />
+      );
     case "utility-readings":
       return (
-        <UtilityReadingsPage canManage={session.permissions.includes("utility:manage")} notify={notify} />
+        <UtilityReadingsPage
+          canManage={session.permissions.includes("utility:manage")}
+          notify={notify}
+          onBack={goOverview}
+        />
       );
     case "fee-types":
-      return <FeeTypesPage canManage={session.permissions.includes("billing:manage")} notify={notify} />;
+      return (
+        <FeeTypesPage
+          canManage={session.permissions.includes("billing:manage")}
+          notify={notify}
+          onBack={goOverview}
+        />
+      );
     default:
-      return <AdminDashboard />;
+      return <AdminDashboard setPage={setPage} />;
   }
 }

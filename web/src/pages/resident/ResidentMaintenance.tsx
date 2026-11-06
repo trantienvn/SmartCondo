@@ -6,7 +6,13 @@ import { Icon } from "../../icons";
 import type { Apartment, MaintenanceRequest } from "../../types";
 import { date } from "../../utils/format";
 
-export function ResidentMaintenance({ notify }: { notify: (message: string) => void }) {
+export function ResidentMaintenance({
+  notify,
+  onBack,
+}: {
+  notify: (message: string) => void;
+  onBack?: () => void;
+}) {
   const apartments = useRemote<Apartment[]>("/apartments", "apartments");
   const requests = useRemote<MaintenanceRequest[]>("/maintenance-requests", "maintenanceRequests");
   const [open, setOpen] = useState(false);
@@ -40,6 +46,8 @@ export function ResidentMaintenance({ notify }: { notify: (message: string) => v
       <PageHeading
         title="Yêu cầu bảo trì"
         subtitle="Theo dõi yêu cầu hiện tại hoặc báo một vấn đề mới."
+        onBack={onBack}
+        backLabel="Trang chủ"
         action={
           <button className="button button-primary" onClick={() => setOpen(!open)}>
             <Icon name="plus" /> Gửi yêu cầu

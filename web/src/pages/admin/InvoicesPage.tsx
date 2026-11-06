@@ -10,9 +10,11 @@ import { date, money } from "../../utils/format";
 export function InvoicesPage({
   canManage,
   notify,
+  onBack,
 }: {
   canManage: boolean;
   notify: (message: string) => void;
+  onBack?: () => void;
 }) {
   const [tab, setTab] = useState<"invoices" | "periods">("invoices");
   const invoices = useRemote<Invoice[]>("/invoices", "invoices");
@@ -84,6 +86,8 @@ export function InvoicesPage({
       <PageHeading
         title="Hóa đơn & Kỳ thu phí"
         subtitle="Quản lý kỳ thu, tính toán tiền điện/nước/phí tự động và theo dõi công nợ."
+        onBack={onBack}
+        backLabel="Tổng quan"
         action={
           canManage && tab === "periods" ? (
             <button className="button button-primary" onClick={() => setOpenCreatePeriod(!openCreatePeriod)}>

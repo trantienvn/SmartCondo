@@ -5,7 +5,7 @@ import { Icon } from "../../icons";
 import type { Apartment, Building, DashboardSummary } from "../../types";
 import { money, statusLabel } from "../../utils/format";
 
-export function AdminDashboard() {
+export function AdminDashboard({ setPage }: { setPage?: (page: any) => void } = {}) {
   const summary = useRemote<DashboardSummary>("/dashboard/summary");
   const apartments = useRemote<Apartment[]>("/apartments", "apartments");
   const buildings = useRemote<Building[]>("/buildings", "buildings");
@@ -45,18 +45,21 @@ export function AdminDashboard() {
           value={summary.loading ? "—" : summary.data?.apartments.total ?? 0}
           detail={`${summary.data?.apartments.occupied ?? 0} căn đang có cư dân`}
           accent="cyan"
+          onClick={setPage ? () => setPage("apartments") : undefined}
         />
         <Metric
           label="Yêu cầu cần xử lý"
           value={summary.loading ? "—" : summary.data?.maintenance.open ?? 0}
           detail="Đang chờ hoặc đang thực hiện"
           accent="amber"
+          onClick={setPage ? () => setPage("maintenance") : undefined}
         />
         <Metric
           label="Công nợ hiện tại"
           value={summary.loading ? "—" : money(summary.data?.invoices.outstanding)}
           detail="Từ các hóa đơn đã phát hành"
           accent="ink"
+          onClick={setPage ? () => setPage("invoices") : undefined}
         />
       </section>
       <section className="dashboard-grid">
@@ -160,7 +163,13 @@ export function AdminDashboard() {
         ) : buildings.data?.length ? (
           <div className="building-list">
             {buildings.data.map((building) => (
-              <div className="building-item" key={building.id}>
+              <div
+                className={`building-item ${setPage ? "building-item-clickable" : ""}`}
+                key={building.id}
+                onClick={setPage ? () => setPage("buildings") : undefined}
+                role={setPage ? "button" : undefined}
+                tabIndex={setPage ? 0 : undefined}
+              >
                 <span className="building-mini">
                   <Icon name="building" />
                 </span>

@@ -14,10 +14,12 @@ export function ResidentPage({
   setPage: (page: any) => void;
   notify: (message: string) => void;
 }) {
-  if (page === "invoices") return <ResidentInvoices />;
-  if (page === "maintenance") return <ResidentMaintenance notify={notify} />;
-  if (page === "notices") return <ResidentNotices notify={notify} />;
-  if (page === "utility-readings") return <ResidentUtilityReadings />;
-  if (page === "fee-types") return <ResidentFeeTypes />;
+  const goHome = () => setPage("overview");
+
+  if (page === "invoices") return <ResidentInvoices onBack={goHome} />;
+  if (page === "maintenance") return <ResidentMaintenance notify={notify} onBack={goHome} />;
+  if (page === "notices") return <ResidentNotices notify={notify} onBack={goHome} />;
+  if (page === "utility-readings") return <ResidentUtilityReadings onBack={goHome} />;
+  if (page === "fee-types") return <ResidentFeeTypes onBack={goHome} />;
   return <ResidentDashboard setPage={setPage} />;
 }

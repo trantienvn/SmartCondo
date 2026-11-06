@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useRemote } from "../../hooks/useRemote";
 import type { InvoiceDetail } from "../../types";
 import { date, money } from "../../utils/format";
@@ -11,6 +12,14 @@ export function InvoiceDetailModal({
   onClose: () => void;
 }) {
   const detail = useRemote<InvoiceDetail>(invoiceId ? `/invoices/${invoiceId}` : "");
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
 
   return (
     <div className="modal-backdrop" onClick={onClose}>

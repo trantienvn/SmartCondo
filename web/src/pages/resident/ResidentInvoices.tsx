@@ -7,7 +7,7 @@ import { Icon } from "../../icons";
 import type { Invoice } from "../../types";
 import { date, money } from "../../utils/format";
 
-export function ResidentInvoices() {
+export function ResidentInvoices({ onBack }: { onBack?: () => void } = {}) {
   const invoices = useRemote<Invoice[]>("/invoices", "invoices");
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(null);
   const [selectedInvoiceForSepay, setSelectedInvoiceForSepay] = useState<Invoice | null>(null);
@@ -43,6 +43,8 @@ export function ResidentInvoices() {
       <PageHeading
         title="Hóa đơn của tôi"
         subtitle="Xem bảng kê chi tiết khoản phí và thực hiện thanh toán trực tuyến."
+        onBack={onBack}
+        backLabel="Trang chủ"
       />
       {message && (
         <div className="inline-message" role="status">

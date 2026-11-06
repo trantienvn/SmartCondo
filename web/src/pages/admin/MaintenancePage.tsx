@@ -7,9 +7,11 @@ import { date } from "../../utils/format";
 export function MaintenancePage({
   canManage,
   notify,
+  onBack,
 }: {
   canManage: boolean;
   notify: (message: string) => void;
+  onBack?: () => void;
 }) {
   const items = useRemote<MaintenanceRequest[]>("/maintenance-requests", "maintenanceRequests");
 
@@ -28,7 +30,12 @@ export function MaintenancePage({
 
   return (
     <>
-      <PageHeading title="Yêu cầu bảo trì" subtitle="Theo dõi tiến độ và mức độ ưu tiên của từng yêu cầu." />
+      <PageHeading
+        title="Yêu cầu bảo trì"
+        subtitle="Theo dõi tiến độ và mức độ ưu tiên của từng yêu cầu."
+        onBack={onBack}
+        backLabel="Tổng quan"
+      />
       <section className="surface table-surface">
         <div className="table-header">
           <h2>Danh sách yêu cầu</h2>

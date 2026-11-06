@@ -9,9 +9,11 @@ import { date } from "../../utils/format";
 export function UtilityReadingsPage({
   canManage,
   notify,
+  onBack,
 }: {
   canManage: boolean;
   notify: (message: string) => void;
+  onBack?: () => void;
 }) {
   const readings = useRemote<UtilityReading[]>("/utility-readings", "readings");
   const apartments = useRemote<Apartment[]>("/apartments", "apartments");
@@ -58,6 +60,8 @@ export function UtilityReadingsPage({
       <PageHeading
         title="Chỉ số điện & nước"
         subtitle="Ghi nhận số công tơ định kỳ hàng tháng để làm cơ sở tự động tính hóa đơn."
+        onBack={onBack}
+        backLabel="Tổng quan"
         action={
           canManage ? (
             <button className="button button-primary" onClick={() => setOpen(!open)}>

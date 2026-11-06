@@ -8,9 +8,11 @@ import type { Apartment } from "../../types";
 export function PeoplePage({
   canManage,
   notify,
+  onBack,
 }: {
   canManage: boolean;
   notify: (message: string) => void;
+  onBack?: () => void;
 }) {
   const apartments = useRemote<Apartment[]>("/apartments", "apartments");
   const [apartmentId, setApartmentId] = useState("");
@@ -88,6 +90,8 @@ export function PeoplePage({
       <PageHeading
         title="Chủ sở hữu & Cư dân"
         subtitle="Quản lý hồ sơ cư trú, tỷ lệ sở hữu và phân quyền thanh toán hóa đơn."
+        onBack={onBack}
+        backLabel="Tổng quan"
         action={
           canManage && apartmentId ? (
             <button className="button button-primary" onClick={() => setOpenAdd(!openAdd)}>

@@ -3,13 +3,15 @@ import { useRemote } from "../../hooks/useRemote";
 import type { UtilityReading } from "../../types";
 import { date } from "../../utils/format";
 
-export function ResidentUtilityReadings() {
+export function ResidentUtilityReadings({ onBack }: { onBack?: () => void } = {}) {
   const readings = useRemote<UtilityReading[]>("/utility-readings", "readings");
   return (
     <>
       <PageHeading
         title="Lịch sử số điện & nước"
         subtitle="Theo dõi mức tiêu thụ điện nước thực tế của căn hộ qua các kỳ."
+        onBack={onBack}
+        backLabel="Trang chủ"
       />
       <section className="surface table-surface">
         <div className="table-header">

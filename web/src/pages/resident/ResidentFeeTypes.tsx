@@ -3,7 +3,7 @@ import { useRemote } from "../../hooks/useRemote";
 import type { FeeType } from "../../types";
 import { money } from "../../utils/format";
 
-export function ResidentFeeTypes() {
+export function ResidentFeeTypes({ onBack }: { onBack?: () => void } = {}) {
   const feeTypes = useRemote<FeeType[]>("/fee-types", "feeTypes");
   const methodLabels: Record<string, string> = {
     PER_SQM: "Theo m² diện tích",
@@ -17,6 +17,8 @@ export function ResidentFeeTypes() {
       <PageHeading
         title="Biểu phí tòa nhà"
         subtitle="Danh mục các đơn giá dịch vụ đang được áp dụng tại chung cư."
+        onBack={onBack}
+        backLabel="Trang chủ"
       />
       <section className="surface table-surface">
         <div className="table-header">

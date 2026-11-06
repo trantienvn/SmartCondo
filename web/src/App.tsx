@@ -26,7 +26,23 @@ export const navItems: {
   { id: "fee-types", label: "Biểu phí", icon: "coins", permission: "billing:manage" },
 ];
 
+function getPageFromHash(session: Session): PageId | null {
+  if (typeof window === "undefined") return null;
+  const hash = window.location.hash.replace(/^#\/?/, "");
+  if (!hash) return null;
+  const residentOnly =
+    session.scopes.some((scope) => ["OWNER", "RESIDENT"].includes(scope.role)) &&
+    !session.scopes.some((scope) => !["OWNER", "RESIDENT"].includes(scope.role));
+  const available = residentOnly
+    ? navItems.filter((item) => ["overview", "invoices", "maintenance", "notices", "utility-readings", "fee-types"].includes(item.id))
+    : navItems.filter((item) => !item.permission || session.permissions.includes(item.permission));
+  const match = available.find((item) => item.id === hash);
+  return match ? (match.id as PageId) : null;
+}
+
 function getInitialPage(session: Session): PageId {
+  const fromHash = getPageFromHash(session);
+  if (fromHash) return fromHash;
   const residentOnly =
     session.scopes.some((scope) => ["OWNER", "RESIDENT"].includes(scope.role)) &&
     !session.scopes.some((scope) => !["OWNER", "RESIDENT"].includes(scope.role));
@@ -43,6 +59,30 @@ export default function App() {
   });
   const [toast, setToast] = useState("");
   const [mobileMenu, setMobileMenu] = useState(false);
+
+  // Đồng bộ browser hash và popstate/hashchange cho Back/Forward button của trình duyệt
+  useEffect(() => {
+    if (!session) return;
+    const handleHashChange = () => {
+      const target = getPageFromHash(session);
+      if (target) {
+        setPage(target);
+      }
+    };
+    window.addEventListener("hashchange", handleHashChange);
+    return () => window.removeEventListener("hashchange", handleHashChange);
+  }, [session]);
+
+  const navigateTo = (nextPage: PageId) => {
+    setPage(nextPage);
+    setMobileMenu(false);
+    if (typeof window !== "undefined") {
+      const currentHash = window.location.hash.replace(/^#\/?/, "");
+      if (currentHash !== nextPage) {
+        window.location.hash = nextPage;
+      }
+    }
+  };
 
   useEffect(() => {
     const expired = () => {
@@ -64,7 +104,9 @@ export default function App() {
       <Login
         onLogin={(next) => {
           setSession(next);
-          setPage(getInitialPage(next));
+          const initial = getInitialPage(next);
+          setPage(initial);
+          window.location.hash = initial;
         }}
       />
     );
@@ -75,7 +117,7 @@ export default function App() {
     !session.scopes.some((scope) => !["OWNER", "RESIDENT"].includes(scope.role));
 
   const availableNav = residentOnly
-    ? navItems.filter((item) => ["overview", "invoices", "maintenance", "notices"].includes(item.id))
+    ? navItems.filter((item) => ["overview", "invoices", "maintenance", "notices", "utility-readings", "fee-types"].includes(item.id))
     : navItems.filter((item) => !item.permission || session.permissions.includes(item.permission));
 
   const active = availableNav.find((item) => item.id === page) ?? availableNav[0];
@@ -95,7 +137,13 @@ export default function App() {
     <div className={residentOnly ? "shell resident-shell" : "shell admin-shell"}>
       {!residentOnly && (
         <aside className={`rail ${mobileMenu ? "rail-open" : ""}`} aria-label="Điều hướng chính">
-          <div className="brand-lockup">
+          <div
+            className="brand-lockup brand-clickable"
+            onClick={() => navigateTo("overview")}
+            title="Về Trang tổng quan"
+            role="button"
+            tabIndex={0}
+          >
             <span className="brand-mark">
               <Icon name="building" />
             </span>
@@ -109,10 +157,7 @@ export default function App() {
               <button
                 key={item.id}
                 className={`nav-link ${currentPage === item.id ? "is-active" : ""}`}
-                onClick={() => {
-                  setPage(item.id);
-                  setMobileMenu(false);
-                }}
+                onClick={() => navigateTo(item.id)}
               >
                 <Icon name={item.icon} />
                 <span>{item.label}</span>
@@ -144,13 +189,58 @@ export default function App() {
             <Icon name="menu" />
           </button>
           {residentOnly ? (
-            <div className="resident-brand">
-              <span className="brand-mark">
-                <Icon name="building" />
-              </span>
-              <strong>
-                smart<span className="brand-light">condo</span>
-              </strong>
+            <div className="resident-top-group">
+              <div
+                className="resident-brand"
+                onClick={() => navigateTo("overview")}
+                title="Về Trang chủ"
+                role="button"
+                tabIndex={0}
+              >
+                <span className="brand-mark">
+                  <Icon name="building" />
+                </span>
+                <strong>
+                  smart<span className="brand-light">condo</span>
+                </strong>
+              </div>
+              {currentPage !== "overview" && (
+                <button
+                  type="button"
+                  className="button-back-ghost"
+                  onClick={() => navigateTo("overview")}
+                  title="Quay lại Trang chủ"
+                >
+                  <Icon name="arrowLeft" />
+                  <span>Trang chủ</span>
+                </button>
+              )}
+              <nav className="resident-desktop-nav" aria-label="Điều hướng nhanh">
+                {availableNav.map((item) => (
+                  <button
+                    key={item.id}
+                    className={`resident-nav-tab ${currentPage === item.id ? "is-active" : ""}`}
+                    onClick={() => navigateTo(item.id)}
+                  >
+                    <Icon name={item.icon} />
+                    <span>{item.label}</span>
+                  </button>
+                ))}
+              </nav>
+            </div>
+          ) : currentPage !== "overview" ? (
+            <div className="crumb-wrap">
+              <button
+                type="button"
+                className="crumb-back-btn"
+                onClick={() => navigateTo("overview")}
+                title="Quay lại Tổng quan"
+              >
+                <Icon name="arrowLeft" />
+                <span>Tổng quan</span>
+              </button>
+              <span className="crumb-sep">/</span>
+              <span className="crumb-current">{active?.label}</span>
             </div>
           ) : (
             <div className="crumb">{active?.label}</div>
@@ -170,9 +260,9 @@ export default function App() {
         </header>
         <div className="workspace">
           {residentOnly ? (
-            <ResidentPage page={currentPage} setPage={setPage} notify={notify} />
+            <ResidentPage page={currentPage} setPage={navigateTo} notify={notify} />
           ) : (
-            <AdminPage page={currentPage} session={session} notify={notify} />
+            <AdminPage page={currentPage} setPage={navigateTo} session={session} notify={notify} />
           )}
         </div>
       </main>
@@ -187,7 +277,7 @@ export default function App() {
             <button
               key={item.id}
               className={currentPage === item.id ? "bottom-active" : ""}
-              onClick={() => setPage(item.id)}
+              onClick={() => navigateTo(item.id)}
             >
               <Icon name={item.icon} />
               <span>{item.label}</span>

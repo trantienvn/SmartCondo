@@ -7,9 +7,11 @@ import type { Apartment, Building } from "../../types";
 export function ApartmentsPage({
   canManage,
   notify,
+  onBack,
 }: {
   canManage: boolean;
   notify: (message: string) => void;
+  onBack?: () => void;
 }) {
   const buildings = useRemote<Building[]>("/buildings", "buildings");
   const [selectedBuilding, setSelectedBuilding] = useState("");
@@ -64,7 +66,12 @@ export function ApartmentsPage({
 
   return (
     <>
-      <PageHeading title="Căn hộ" subtitle="Xem mặt bằng và thêm khối, tầng hoặc căn hộ." />
+      <PageHeading
+        title="Căn hộ"
+        subtitle="Xem mặt bằng và thêm khối, tầng hoặc căn hộ."
+        onBack={onBack}
+        backLabel="Tổng quan"
+      />
       <div className="toolbar-row">
         <label className="select-label">
           Tòa nhà

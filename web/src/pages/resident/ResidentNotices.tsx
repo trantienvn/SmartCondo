@@ -3,11 +3,22 @@ import { ErrorBanner, EmptyState, LoadingLine, NoticeItem, PageHeading } from ".
 import { useRemote } from "../../hooks/useRemote";
 import type { Notice } from "../../types";
 
-export function ResidentNotices({ notify }: { notify: (message: string) => void }) {
+export function ResidentNotices({
+  notify,
+  onBack,
+}: {
+  notify: (message: string) => void;
+  onBack?: () => void;
+}) {
   const notices = useRemote<Notice[]>("/notifications", "notifications");
   return (
     <>
-      <PageHeading title="Thông báo" subtitle="Thông tin mới từ Ban quản lý tòa nhà." />
+      <PageHeading
+        title="Thông báo"
+        subtitle="Thông tin mới từ Ban quản lý tòa nhà."
+        onBack={onBack}
+        backLabel="Trang chủ"
+      />
       {notices.loading ? (
         <LoadingLine />
       ) : notices.error ? (

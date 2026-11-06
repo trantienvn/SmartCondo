@@ -8,9 +8,11 @@ import type { Building } from "../../types";
 export function BuildingsPage({
   canCreate,
   notify,
+  onBack,
 }: {
   canCreate: boolean;
   notify: (message: string) => void;
+  onBack?: () => void;
 }) {
   const buildings = useRemote<Building[]>("/buildings", "buildings");
   const organizations = useRemote<{ id: string; code: string; name: string }[]>(
@@ -48,6 +50,8 @@ export function BuildingsPage({
       <PageHeading
         title="Tòa nhà"
         subtitle="Danh sách tòa nhà bạn được phân công."
+        onBack={onBack}
+        backLabel="Tổng quan"
         action={
           canCreate && (
             <button className="button button-primary" onClick={() => setFormOpen(!formOpen)}>

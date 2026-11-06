@@ -64,6 +64,19 @@ export function SepayModal({
   const [copied, setCopied] = useState(false);
   const [simulating, setSimulating] = useState(false);
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        if (status === "PAID") {
+          onSuccess();
+        }
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose, onSuccess, status]);
+
   async function initPayment() {
     setLoading(true);
     setError("");

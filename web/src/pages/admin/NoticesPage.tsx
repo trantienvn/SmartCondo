@@ -8,9 +8,11 @@ import type { Building, Notice } from "../../types";
 export function NoticesPage({
   canManage,
   notify,
+  onBack,
 }: {
   canManage: boolean;
   notify: (message: string) => void;
+  onBack?: () => void;
 }) {
   const notices = useRemote<Notice[]>("/notifications", "notifications");
   const buildings = useRemote<Building[]>("/buildings", "buildings");
@@ -44,6 +46,8 @@ export function NoticesPage({
       <PageHeading
         title="Thông báo"
         subtitle="Thông tin được gửi đến chủ sở hữu và cư dân hiện tại."
+        onBack={onBack}
+        backLabel="Tổng quan"
         action={
           canManage && buildings.data?.length ? (
             <button className="button button-primary" onClick={() => setOpen(!open)}>
